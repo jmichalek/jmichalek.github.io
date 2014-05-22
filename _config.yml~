@@ -8,4 +8,4 @@ url: "http://jmichalek.github.io/"
 # Build settings
 markdown: kramdown
 permalink: pretty
-highlighter: null
+pygments: false
