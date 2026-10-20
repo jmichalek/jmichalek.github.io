@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Gongové hodiny</title>
+<style>
+:root{--bg:#fff;--fg:#000;--muted:#444;--btn:#f2f2f2;--border:#ccc;--hover:#e5e5e5}
+html.night{--bg:#000;--fg:#ff3b30;--muted:#b82c25;--btn:#140000;--border:#6b1712;--hover:#240000}
+*{box-sizing:border-box}html,body{margin:0;width:100%;min-height:100%;background:var(--bg);color:var(--fg);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;transition:background-color .6s ease,color .6s ease}body{min-height:100dvh;overflow:auto}.page{width:100%;min-height:100dvh;display:flex;flex-direction:column;align-items:center;padding:clamp(12px,2.5vw,28px)}.time-row{width:100%;display:flex;justify-content:center;align-items:baseline;gap:.18em;white-space:nowrap;line-height:.9}.time{font-size:clamp(86px,22vw,320px);font-weight:760;letter-spacing:-.065em;font-variant-numeric:tabular-nums}.ampm{font-size:clamp(22px,4vw,58px);font-weight:760;letter-spacing:.03em}.date{margin-top:clamp(8px,1.5vw,18px);font-size:clamp(18px,2.5vw,32px);font-weight:600;color:var(--muted);text-align:center}.controls{margin-top:clamp(20px,3vw,34px);display:flex;flex-wrap:wrap;justify-content:center;gap:10px;width:min(920px,100%)}button{border:1px solid var(--border);background:var(--btn);color:var(--fg);border-radius:999px;padding:11px 17px;font:inherit;font-weight:700;cursor:pointer;transition:background-color .15s ease,transform .12s ease,color .6s ease}button:hover{background:var(--hover)}button:active{transform:translateY(1px)}button:focus-visible{outline:3px solid var(--fg);outline-offset:3px}.status{margin-top:18px;color:var(--muted);font-size:14px;text-align:center}.hint{margin-top:8px;color:var(--muted);font-size:13px;text-align:center;opacity:.78}body.gonging{animation:gongFlash 6s ease-out both}@keyframes gongFlash{0%{filter:brightness(1)}4%{filter:brightness(1.35)}16%{filter:brightness(.96)}30%{filter:brightness(1.18)}100%{filter:brightness(1)}}html.night body.gonging{animation-name:gongFlashNight}@keyframes gongFlashNight{0%{filter:brightness(1)}4%{filter:brightness(1.75)}16%{filter:brightness(.82)}30%{filter:brightness(1.35)}100%{filter:brightness(1)}}html.mini .page{padding:10px}html.mini .time{font-size:min(30vw,38vh)}html.mini .ampm{font-size:min(6vw,8vh)}html.mini .date{font-size:min(5vw,5vh);margin-top:8px}html.mini .controls{margin-top:12px;gap:7px}html.mini button{padding:7px 11px;font-size:12px}@media(max-width:700px){.page{padding:12px}.time{font-size:clamp(72px,24vw,180px)}.ampm{font-size:clamp(20px,5vw,38px)}.date{font-size:clamp(17px,4vw,24px)}.controls{margin-top:22px}}@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important}}
+</style>
+</head>
+<body>
+<main class="page">
+  <div class="time-row" aria-label="Aktuální čas"><div class="time" id="time">12:00</div><div class="ampm" id="ampm">PM</div></div>
+  <div class="date" id="date"></div>
+  <div class="controls">
+    <button id="soundButton" type="button">Zapnout gong</button>
+    <button id="testButton" type="button">Vyzkoušet gong</button>
+    <button id="fullscreenButton" type="button">Celá obrazovka</button>
+    <button id="miniButton" type="button">Malé okno</button>
+  </div>
+  <div class="status" id="status">Gong je připravený.</div>
+  <div class="hint">Mezerník přepíná celou obrazovku.</div>
+</main>
+<script>
+(()=>{"use strict";
+const p=new URLSearchParams(location.search);if(p.get("mini")==="1")document.documentElement.classList.add("mini");
+const timeEl=document.getElementById("time"),ampmEl=document.getElementById("ampm"),dateEl=document.getElementById("date"),soundButton=document.getElementById("soundButton"),testButton=document.getElementById("testButton"),fullscreenButton=document.getElementById("fullscreenButton"),miniButton=document.getElementById("miniButton"),statusEl=document.getElementById("status");
+let audioCtx=null,masterGain=null,gongEnabled=localStorage.getItem("gong-enabled")==="1",lastStrikeKey="",gongClassTimer=null;
+function setDayNight(now){const h=now.getHours();document.documentElement.classList.toggle("night",h<7||h>=19)}
+function updateButtons(){soundButton.textContent=gongEnabled?"Vypnout gong":"Zapnout gong";statusEl.textContent=gongEnabled?"Gong je zapnutý. Zazní v celou a v půl.":"Gong je vypnutý."}
+function ensureAudio(){if(!audioCtx){const A=window.AudioContext||window.webkitAudioContext;audioCtx=new A();masterGain=audioCtx.createGain();masterGain.gain.value=.74;const c=audioCtx.createDynamicsCompressor();c.threshold.value=-18;c.knee.value=16;c.ratio.value=3;c.attack.value=.008;c.release.value=.38;masterGain.connect(c);c.connect(audioCtx.destination)}if(audioCtx.state==="suspended")audioCtx.resume()}
+function tone(freq,start,dur,gain,detune=0){const o=audioCtx.createOscillator(),g=audioCtx.createGain(),f=audioCtx.createBiquadFilter();o.type="sine";o.frequency.value=freq;o.detune.value=detune;f.type="lowpass";f.frequency.value=Math.min(9000,freq*5.5);f.Q.value=.7;const end=start+dur;g.gain.setValueAtTime(.0001,start);g.gain.exponentialRampToValueAtTime(gain,start+.018);g.gain.exponentialRampToValueAtTime(gain*.5,start+.38);g.gain.exponentialRampToValueAtTime(.0001,end);o.connect(f);f.connect(g);g.connect(masterGain);o.start(start);o.stop(end+.05)}
+function playGong(){ensureAudio();const s=audioCtx.currentTime+.03;[[174.61,0,6,.44,0],[261.63,.015,5.6,.24,3],[349.23,.028,5.1,.18,-4],[523.25,.045,4.5,.11,7],[698.46,.07,3.7,.07,-6],[1046.5,.09,2.9,.045,3],[174.61,.85,5.1,.18,2],[261.63,.87,4.8,.10,-3],[349.23,.90,4.3,.075,4]].forEach(x=>tone(x[0],s+x[1],x[2],x[3],x[4]));document.body.classList.remove("gonging");void document.body.offsetWidth;document.body.classList.add("gonging");clearTimeout(gongClassTimer);gongClassTimer=setTimeout(()=>document.body.classList.remove("gonging"),6100)}
+function updateClock(){const now=new Date();let h=now.getHours(),ap=h>=12?"PM":"AM";h%=12;if(h===0)h=12;timeEl.textContent=`${h}:${String(now.getMinutes()).padStart(2,"0")}`;ampmEl.textContent=ap;dateEl.textContent=new Intl.DateTimeFormat("cs-CZ",{weekday:"long",day:"numeric",month:"long",year:"numeric"}).format(now);setDayNight(now);if(gongEnabled&&now.getSeconds()===0&&(now.getMinutes()===0||now.getMinutes()===30)){const k=`${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${now.getHours()}-${now.getMinutes()}`;if(k!==lastStrikeKey){lastStrikeKey=k;playGong()}}}
+async function toggleFullscreen(){try{if(!document.fullscreenElement)await document.documentElement.requestFullscreen();else await document.exitFullscreen()}catch(e){}}
+fullscreenButton.addEventListener("click",toggleFullscreen);document.addEventListener("fullscreenchange",()=>fullscreenButton.textContent=document.fullscreenElement?"Ukončit celou obrazovku":"Celá obrazovka");document.addEventListener("keydown",e=>{if(e.code!=="Space"||e.repeat)return;const t=document.activeElement?.tagName;if(["INPUT","TEXTAREA","SELECT","BUTTON"].includes(t))return;e.preventDefault();toggleFullscreen()});
+soundButton.addEventListener("click",()=>{ensureAudio();gongEnabled=!gongEnabled;localStorage.setItem("gong-enabled",gongEnabled?"1":"0");updateButtons()});testButton.addEventListener("click",()=>{ensureAudio();playGong()});miniButton.addEventListener("click",()=>{const u=new URL(location.href);u.searchParams.set("mini","1");window.open(u.toString(),"_blank","popup=yes,width=620,height=360,resizable=yes,scrollbars=no,noopener,noreferrer")});window.addEventListener("storage",e=>{if(e.key==="gong-enabled"){gongEnabled=e.newValue==="1";updateButtons()}});updateButtons();updateClock();setInterval(updateClock,250);
+})();
+</script>
+</body>
+</html>
